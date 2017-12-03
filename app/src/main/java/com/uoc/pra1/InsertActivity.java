@@ -1,20 +1,22 @@
 package com.uoc.pra1;
 
-import android.Manifest;
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.Settings;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -29,6 +31,11 @@ import com.uoc.datalevel.DataException;
 import com.uoc.datalevel.DataObject;
 import com.uoc.datalevel.SaveCallback;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+
 import static android.R.attr.name;
 import static com.uoc.pra1.R.id.imageView;
 
@@ -39,7 +46,7 @@ public class InsertActivity extends AppCompatActivity {
 
     Button btChangeImage, btInsertItem;
     EditText etPrice, etName, etDescription;
-    ImageView image;
+    ImageView imageView;
     TextView txtLatitudeLongitude;
 
     private static final int PETICION_PERMISO_LOCALIZACION = 101;
@@ -54,12 +61,14 @@ public class InsertActivity extends AppCompatActivity {
 
     private String[] permissions;
 
-
-
-
     private static final String ERR_PERMISSION = "Permission denied. Check permissions on AndroidManifest.xml.";
 
     private int REQUEST_CAMERA = 0, SELECT_FILE = 1;
+
+    private static final int RQS_OPEN_CAMERA = 0;
+    private static final int RQS_OPEN_IMAGE = 1;
+    private static final int RQS_GET_IMAGE = 2;
+    private static final int RQS_PICK_IMAGE = 3;
 
     private String userChoosenTask;
 
@@ -74,13 +83,12 @@ public class InsertActivity extends AppCompatActivity {
         android.support.v7.app.ActionBar actionBar = getSupportActionBar();
         actionBar.setTitle("PR2 :: Insert");
 
-        // Location
-        // Presentamos los datos de Longitud y Latitud
+        // Location. Presentamos los datos de Longitud y Latitud
         txtLatitudeLongitude=(TextView)this.findViewById(R.id.textViewLatitudeLongitude);
 
         locationManager=(LocationManager) mContext.getSystemService(Context.LOCATION_SERVICE);
         locationManager.requestLocationUpdates( LocationManager.GPS_PROVIDER, 2000, 10, locationListenerGPS);
-       // isLocationEnabled();
+        isLocationEnabled();
 
         location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
         if(location!=null){
@@ -95,57 +103,9 @@ public class InsertActivity extends AppCompatActivity {
             String msg = "Ha fallado la obtención de los datos de posición";
             Toast.makeText(getBaseContext(), msg, Toast.LENGTH_LONG).show();
         }
-        //locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, MIN_TIEMPO_ENTRE_UPDATES, MIN_CAMBIO_DISTANCIA_PARA_UPDATES, locationListener);
 
-
- /*       locationListener = new LocationListener() {
-                @Override
-                public void onLocationChanged(Location location) {
-
-                    if(location != null) {
-                        txtLatitudeLongitude.setText("Latitude="+location.getLatitude()+" " + "Longitude="+location.getLongitude());
-                    };
-
-                    if (ContextCompat.checkSelfPermission(InsertActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                        // Ask permission
-                        ActivityCompat.requestPermissions(InsertActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PETICION_PERMISO_LOCALIZACION);
-                    } else {
-                        // Ask last know location
-                        location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-                         if(location!=null){
-                            // set TextView
-                            latitude=location.getLatitude();
-                            longitude=location.getLongitude();
-                           // String msg = "New Latitude: "+location.getLatitude()+"New Longitude: "+location.getLongitude();
-                            String msg = "New Latitude: "+String.valueOf(location.getLatitude())+"New Longitude: "+String.valueOf(location.getLongitude());
-                            Toast.makeText(getBaseContext(), msg, Toast.LENGTH_LONG).show();
-                            txtLatitudeLongitude.setText("lat:"+latitude+" lon:"+longitude);
-                        } else {
-                            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
-                        }
-                    }
-
-                }
-
-                @Override
-                public void onStatusChanged(String s, int i, Bundle bundle) {
-
-                }
-
-                @Override
-                public void onProviderEnabled(String s) {
-
-                }
-
-                @Override
-                public void onProviderDisabled(String s) {
-
-                }
-
-            };
-*/
         // Definimos la imagen, el botón para cambiar la imagen y el listener asociado
-        image = (ImageView) findViewById(imageView);
+        imageView = (ImageView) findViewById(R.id.imageView);
 
         btChangeImage = (Button)findViewById(R.id.btnChangeImage);
 
@@ -155,8 +115,8 @@ public class InsertActivity extends AppCompatActivity {
               //  Bitmap bMap = BitmapFactory.decodeFile("/sdcard/test.png");
               //  image.setImageBitmap(bMap);
 
-                    selectImage();
-                
+               //     selectImage();
+                galleryIntent();
             }
         });
 
@@ -215,7 +175,7 @@ public class InsertActivity extends AppCompatActivity {
                     new_item.put("name", etName.getText());
                     new_item.put("description", etDescription.getText());
                     new_item.put("price", etPrice.getText());
-                    new_item.put("image", ((BitmapDrawable) image.getDrawable()).getBitmap());
+                    new_item.put("image", ((BitmapDrawable) imageView.getDrawable()).getBitmap());
 
                     new_item.saveInBackground(new SaveCallback<DataObject>() {
                                                   @Override
@@ -270,11 +230,13 @@ public class InsertActivity extends AppCompatActivity {
         intent.setType("image/*");
         intent.setAction(Intent.ACTION_GET_CONTENT);
         startActivityForResult(Intent.createChooser(intent, "Select File"),SELECT_FILE);
+
     }
 
     private void cameraIntent() {
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         startActivityForResult(intent, REQUEST_CAMERA);
+
     }
 
     private void selectImage() {
@@ -334,7 +296,7 @@ public class InsertActivity extends AppCompatActivity {
     private void isLocationEnabled() {
 
         if(!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)){
-     /*       AlertDialog.Builder alertDialog=new AlertDialog.Builder(mContext);
+            AlertDialog.Builder alertDialog=new AlertDialog.Builder(mContext);
             alertDialog.setTitle("Enable Location");
             alertDialog.setMessage("Your locations setting is not enabled. Please enabled it in settings menu.");
             alertDialog.setPositiveButton("Location Settings", new DialogInterface.OnClickListener(){
@@ -350,26 +312,80 @@ public class InsertActivity extends AppCompatActivity {
             });
             AlertDialog alert=alertDialog.create();
             alert.show();
-      */  }
-        else{
-            AlertDialog.Builder alertDialog=new AlertDialog.Builder(mContext);
-            alertDialog.setTitle("Confirm Location");
-            alertDialog.setMessage("Your Location is enabled, please enjoy");
-            alertDialog.setNegativeButton("Back to interface",new DialogInterface.OnClickListener(){
-                public void onClick(DialogInterface dialog, int which){
-                    dialog.cancel();
-                }
-            });
-            AlertDialog alert=alertDialog.create();
-            alert.show();
-        }
+       }
+
     }
 
- /*   protected void onResume(){
-        super.onResume();
-        isLocationEnabled();
+
+    /** Create a file Uri for saving an image or video */
+    private static Uri getOutputMediaFileUri(int type) {
+        return Uri.fromFile(getOutputMediaFile(type));
     }
-*/
+
+    /** Create a File for saving an image or video */
+    private static File getOutputMediaFile(int type) {
+
+        // Check that the SDCard is mounted
+        File mediaStorageDir = new File(Environment.getExternalStorageDirectory(), Environment.DIRECTORY_PICTURES);
+
+        // Create the storage directory(MyCameraVideo) if it does not exist
+        if (!mediaStorageDir.exists()) {
+            if (!mediaStorageDir.mkdirs()) {
+             //   String msg="Failed in getOutputMediaFile.");
+             //   Toast.makeText(mContext, msg, Toast.LENGTH_LONG).show();
+                return null;
+            }
+        }
+
+        java.util.Date date = new java.util.Date();
+      //  String timeStamp = getTimeStamp();
+
+        File mediaFile;
+
+        if (type == 1) {
+            // For unique video file name appending current timeStamp with file name
+            mediaFile = new File(mediaStorageDir.getPath() + File.separator + ".jpg");
+        } else {
+            return null;
+        }
+
+        return mediaFile;
+    }
+
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (resultCode == Activity.RESULT_OK) {
+
+
+            if (    requestCode == RQS_OPEN_CAMERA ||
+                    requestCode == RQS_OPEN_IMAGE ||
+                    requestCode == RQS_GET_IMAGE ||
+                    requestCode == RQS_PICK_IMAGE) {
+
+                imageView.setImageBitmap(null);
+
+                Uri mediaUri = data.getData();
+
+                String mediaPath = mediaUri.getPath();
+
+
+                //display the image
+                try {
+                    InputStream inputStream = getBaseContext().getContentResolver().openInputStream(mediaUri);
+                    Bitmap bm = BitmapFactory.decodeStream(inputStream);
+
+                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                    byte[] byteArray = stream.toByteArray();
+
+                    imageView.setImageBitmap(bm);
+
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
 
 
 }

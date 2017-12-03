@@ -10,10 +10,11 @@
         android:id="@+id/imageView"
         android:layout_width="222dp"
         android:layout_height="144dp"
+        android:adjustViewBounds="false"
+        android:cropToPadding="false"
         android:visibility="visible"
-        android:src="@mipmap/ic_launcher"
-        tools:layout_editor_absoluteX="16dp"
-        tools:layout_editor_absoluteY="16dp" />
+        tools:layout_editor_absoluteX="4dp"
+        tools:layout_editor_absoluteY="9dp" />
 
     <Button
         android:id="@+id/btnChangeImage"
